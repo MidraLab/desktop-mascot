@@ -6,7 +6,10 @@ using Cysharp.Threading.Tasks;
 using Unity.Logging;
 using UnityEngine;
 using UnityEngine.InputSystem;
+
+#if !UNITY_WSA
 using Kirurobo;
+#endif
 
 namespace uDesktopMascot
 {
@@ -25,10 +28,12 @@ namespace uDesktopMascot
         /// </summary>
         [SerializeField] private List<AnimationClip> _defaultAnimationClip;
 
+#if !UNITY_WSA
         /// <summary>
         /// ウィンドウ移動ハンドラ
         /// </summary>
         [SerializeField] private UniWindowMoveHandle _uniWindowMoveHandle;
+#endif
 
         /// <summary>
         /// メニューのビュー
@@ -203,7 +208,9 @@ namespace uDesktopMascot
 #endif
 
             // _characterAnimationController.Update();
-            
+
+#if !UNITY_WSA
+
             // モーションを切り替える
             if (_isDragging && (_uniWindowMoveHandle.IsDragging || _isDraggingModel))
             {
@@ -232,6 +239,7 @@ namespace uDesktopMascot
                     _isHolding = false;
                 }
             }
+#endif
         }
 
         /// <summary>

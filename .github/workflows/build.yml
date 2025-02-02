@@ -13,6 +13,11 @@ on:
         required: true
         default: true
         type: boolean
+      build_uwp:
+        description: 'Build for UWP'
+        required: true
+        default: true
+        type: boolean
   pull_request:
     branches:
       - main
@@ -227,3 +232,72 @@ jobs:
         with:
           name: uDesktopMascot_mac_installer_v${{ needs.check-branch.outputs.current_version }}
           path: build/uDesktopMascot_mac_installer_v${{ needs.check-branch.outputs.current_version }}.pkg
+
+  build-uwp:
+    if: ${{ github.event_name == 'pull_request' || inputs.build_uwp }}
+    needs: [check-branch]
+    runs-on: windows-latest
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4.2.2
+
+      - name: Create LFS file list
+        run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS cache
+        uses: actions/cache@v4.2.0
+        id: lfs-cache
+        with:
+          path: .git/lfs
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
+
+      - name: Git LFS Pull
+        run: |
+          git lfs pull
+          git add .
+          git reset --hard
+
+      - uses: actions/cache@v4.2.0
+        with:
+          path: Library
+          key: Library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-
+
+      - name: UWP向けにUnityプロジェクトをビルド
+        uses: game-ci/unity-builder@v4.3.0
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          targetPlatform: 'WSAPlayer'
+          buildName: 'uDesktopMascotUWP'
+          versioning: Custom
+          version: ${{ needs.check-branch.outputs.current_version }}
+          unityVersion: '6000.0.31f1'
+
+      - name: MSBuildのセットアップ
+        uses: microsoft/setup-msbuild@v1.0.3
+
+      - name: ビルド出力ディレクトリの内容を表示
+        run: |
+          echo "ビルド出力ディレクトリの内容を表示します。"
+          dir build\uDesktopMascotUWP
+
+      - name: UWPソリューションのビルドと.msixパッケージの作成
+        run: |
+          msbuild "$env:SOLUTION_PATH" /p:Configuration="$env:CONFIGURATION" /p:Platform="$env:PLATFORM" /p:UapAppxPackageBuildMode="$env:BUILD_MODE" /p:AppxBundle="$env:APPX_BUNDLE"
+        env:
+          SOLUTION_PATH: 'build/uDesktopMascotUWP/uDesktopMascotUWP.sln'  # ソリューションファイルのパスを調整してください
+          CONFIGURATION: 'Master'
+          PLATFORM: 'x64'
+          BUILD_MODE: 'StoreUpload'
+          APPX_BUNDLE: 'Always'
+
+      - name: .msixパッケージのアップロード
+        uses: actions/upload-artifact@v4.6.0
+        with:
+          name: uDesktopMascot_uwp_msix_v${{ needs.check-branch.outputs.current_version }}
+          path: |
+            build/uDesktopMascotUWP/AppPackages/**/*
