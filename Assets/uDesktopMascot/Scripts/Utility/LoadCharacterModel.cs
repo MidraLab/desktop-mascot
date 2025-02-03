@@ -10,18 +10,25 @@ namespace uDesktopMascot
     /// <summary>
     /// キャラクターモデルを読み込むクラス
     /// </summary>
-    public static class LoadCharacterModel
+    public class LoadCharacterModel : IDisposable
     {
+        
         /// <summary>
-        /// モデルの種類を表す列挙型
+        /// ロード済みのVRM
         /// </summary>
-        private enum ModelType
+        private readonly LoadVrm _loadVrm;
+        
+        /// <summary>
+        /// キャラクターモデルのGameObject
+        /// </summary>
+        public GameObject CharacterModelObject => _loadVrm.Instance.gameObject;
+        
+        /// <summary>
+        /// コンストラクタ
+        /// </summary>
+        public LoadCharacterModel()
         {
-            Unknown,
-            FBX,
-            VRM,
-            GLTF,
-            GLB
+            _loadVrm = new LoadVrm();
         }
 
         /// <summary>
@@ -29,91 +36,37 @@ namespace uDesktopMascot
         /// </summary>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public static async UniTask<GameObject> LoadModel(CancellationToken cancellationToken)
+        public async UniTask LoadModel(CancellationToken cancellationToken)
         {
             // 設定ファイルからキャラクター情報の取得
             var characterSettings = ApplicationSettings.Instance.Character;
-
-            GameObject model = null;
-
-            // モデルの種類を判定
-            var modelType = GetModelType(characterSettings.ModelPath);
-
-            try
+            
+            // パスにモデルが存在するかどうかを確認
+            if (!File.Exists(characterSettings.ModelPath))
             {
-                switch (modelType)
+                Log.Warning("指定されたモデルが見つかりません: {0}。デフォルトモデルをロードします", characterSettings.ModelPath);
+                await _loadVrm.LoadDefaultModel(cancellationToken);
+            } else
+            {
+                await _loadVrm.LoadVrmModel(characterSettings.ModelPath, cancellationToken);
+                
+                // シェーダーをlilToonに置き換える
+                bool shaderReplaceSuccess = ReplaceShadersWithLilToon(_loadVrm.Instance.gameObject);
+            
+                if (!shaderReplaceSuccess)
                 {
-                    case ModelType.FBX:
-                        // FBXモデルの読み込み
-                        model = await LoadFBX.LoadModelAsync(characterSettings.ModelPath, cancellationToken);
-                        break;
-                    case ModelType.VRM:
-                    case ModelType.GLB:
-                    case ModelType.GLTF:
-                        // VRM、GLB、GLTFモデルの読み込み
-                        model = await LoadVRM.LoadModelAsync(characterSettings.ModelPath, cancellationToken);
-                        break;
-                    default:
-                        Log.Error("サポートされていないモデル形式です: {0}", characterSettings.ModelPath);
-                        break;
+                    Log.Warning("シェーダーの置き換えに失敗したため、デフォルトのシェーダーを使用します。");
                 }
             }
-            catch (Exception ex)
-            {
-                Log.Error("モデルのロード中にエラーが発生しました: {0}", ex.Message);
-            }
-
-            // モデルのロードが失敗した場合、デフォルトモデルをロードする
-            if (model == null)
-            {
-                Log.Warning("指定されたモデルのロードに失敗したため、デフォルトモデルをロードします。");
-                model = LoadVRM.LoadDefaultModel();
-
-                if (model == null)
-                {
-                    Log.Error("デフォルトモデルのロードにも失敗しました。");
-                    return null;
-                }
-            }
-
-            // シェーダーをlilToonに置き換える
-            bool shaderReplaceSuccess = ReplaceShadersWithLilToon(model);
-
-            if (!shaderReplaceSuccess)
-            {
-                Log.Warning("シェーダーの置き換えに失敗したため、デフォルトのシェーダーを使用します。");
-            }
-
-            return model;
         }
 
         /// <summary>
-        /// ファイルパスからモデルの種類を判定する
+        /// VRMAファイルをロードする
         /// </summary>
-        /// <param name="modelPath"></param>
-        /// <returns></returns>
-        private static ModelType GetModelType(string modelPath)
+        /// <param name="path"></param>
+        public async UniTask LoadVRMA(string path)
         {
-            if (string.IsNullOrEmpty(modelPath))
-            {
-                return ModelType.Unknown;
-            }
-
-            string extension = Path.GetExtension(modelPath).ToLowerInvariant();
-
-            switch (extension)
-            {
-                case ".fbx":
-                    return ModelType.FBX;
-                case ".vrm":
-                    return ModelType.VRM;
-                case ".gltf":
-                    return ModelType.GLTF;
-                case ".glb":
-                    return ModelType.GLB;
-                default:
-                    return ModelType.Unknown;
-            }
+           await _loadVrm.LoadMotionsAsync(path);
         }
 
         /// <summary>
@@ -166,6 +119,14 @@ namespace uDesktopMascot
                 Log.Error($"シェーダーの置き換え中にエラーが発生しました: {e.Message}");
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Dispose
+        /// </summary>
+        public void Dispose()
+        {
+            _loadVrm?.Dispose();
         }
     }
 }

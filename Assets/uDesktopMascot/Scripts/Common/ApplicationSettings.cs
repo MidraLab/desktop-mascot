@@ -134,7 +134,6 @@ namespace uDesktopMascot
                         break;
                     case "MenuUISettings":
                         AssignSettings(MenuUISettings, section.Value);
-                        Log.Debug("MenuUISettings: " + MenuUISettings.BackgroundColor);
                         break;
                     default:
                         Log.Warning($"未知の設定セクションが見つかりました: {section.Key}");
