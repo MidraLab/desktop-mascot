@@ -173,13 +173,15 @@ jobs:
           
       - name: Overwrite Plugins folder with correct libraries
         run: |
-          echo "プラグインフォルダの上書きを開始します。"
+          echo プラグインフォルダの上書きを開始します。
           REM 一時ディレクトリのパスは、通常 %TEMP%\LLMUnityBuild となります。
           REM ここでは x86_64 フォルダ内のファイルを上書きする例です。
           mkdir "build\uDesktopMascot_Data\Plugins\x86_64" 2>NUL
           xcopy /E /Y /I "%TEMP%\LLMUnityBuild\x86_64\*" "build\uDesktopMascot_Data\Plugins\x86_64"
-          echo "プラグインフォルダの上書きが完了しました。"
-
+          echo プラグインフォルダの上書きが完了しました。
+        shell: cmd
+      
+      
       - name: Upload the Build for StandaloneWindows64
         uses: actions/upload-artifact@v4.6.0
         with:
